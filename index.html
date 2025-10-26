@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Paddos - Women's Safety Map</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            height: 100vh;
+            overflow: hidden;
+            background: #FFF9E6;
+        }
+        
+        #header {
+            background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%);
+            color: #1a1a1a;
+            padding: 12px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 15px rgba(255, 215, 0, 0.3);
+        }
+        
+        #header h1 {
+            font-size: 24px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        #live-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            padding: 6px 14px;
+            background: rgba(0,0,0,0.1);
+            border-radius: 20px;
+            font-weight: 600;
+        }
+        
+        .pulse {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #4CAF50;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+        
+        .confidence-badge {
+            padding: 6px 12px;
+            background: rgba(0,0,0,0.1);
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 700;
+        }
+        
+        #main-container {
+            display: flex;
+            height: calc(100vh - 50px);
+        }
+        
+        #map {
+            flex: 1;
+            position: relative;
+        }
+        
+        .map-overlay {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: #FFD700;
+            padding: 10px 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            z-index: 1000;
+            font-size: 13px;
+            font-weight: 600;
+        }
+        
+        #sidebar {
+            width: 400px;
+            background: linear-gradient(180deg, #FFFAF0 0%, #FFF9E6 100%);
+            overflow-y: auto;
+            box-shadow: -2px 0 20px rgba(255, 215, 0, 0.2);
+        }
+        
+        .sidebar-section {
+            padding: 20px;
+            border-bottom: 2px solid #FFE5B4;
+        }
+        
+        .sidebar-section h2 {
+            font-size: 16px;
+            margin-bottom: 15px;
+            font-weight: 700;
+            color: #1a1a1a;
+        }
+        
+        .safety-score-card {
+            text-align: center;
+            padding: 25px;
+            border-radius: 12px;
+            margin-bottom: 15px;
+            border: 3px solid;
+        }
+        
+        .score-value {
+            font-size: 56px;
+            font-weight: 900;
+            margin: 15px 0;
+        }
+        
+        .score-rating {
+            font-size: 22px;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+        
+        .score-confidence {
+            margin-top: 12px;
+            padding: 8px 15px;
+            background: rgba(255, 215, 0, 0.3);
+            border-radius: 20px;
+            display: inline-block;
+            font-size: 13px;
+            font-weight: 700;
+        }
+        
+        .service-unavailable {
+            background: #FFE0B2;
+            border: 3px solid #FF9800;
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+        }
+        
+        .service-unavailable-icon {
+            font-size: 48px;
+            margin-bottom: 15px;
+        }
+        
+        .service-unavailable h3 {
+            font-size: 20px;
+            margin-bottom: 10px;
+            color: #E65100;
+        }
+        
+        .service-unavailable p {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 8px;
+        }
+        
+        .service-status-banner {
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            font-size: 13px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            border: 2px solid;
+        }
+        
+        .breakdown-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+        
+        .breakdown-card {
+            background: linear-gradient(135deg, #FFF9E6 0%, #FFE5B4 100%);
+            padding: 14px;
+            border-radius: 10px;
+            text-align: center;
+            border: 2px solid #FFD700;
+        }
+        
+        .breakdown-label {
+            font-size: 10px;
+            color: #666;
+            text-transform: uppercase;
+            margin-bottom: 6px;
+            font-weight: 700;
+        }
+        
+        .breakdown-value {
+            font-size: 26px;
+            font-weight: 900;
+        }
+        
+        .breakdown-bar {
+            height: 4px;
+            background: #FFE5B4;
+            border-radius: 2px;
+            margin-top: 8px;
+            overflow: hidden;
+        }
+        
+        .breakdown-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #FFD700, #FFA500);
+            transition: width 0.5s;
+        }
+        
+        .place-card {
+            background: #FFF9E6;
+            padding: 14px;
+            border-radius: 10px;
+            margin-bottom: 10px;
+            border: 2px solid #FFE5B4;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .place-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(255, 215, 0, 0.3);
+            border-color: #FFD700;
+        }
+        
+        .place-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+        }
+        
+        .place-name {
+            font-weight: 700;
+            font-size: 14px;
+        }
+        
+        .place-distance {
+            font-size: 12px;
+            background: #FFD700;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-weight: 700;
+        }
+        
+        .place-type {
+            font-size: 11px;
+            color: #888;
+            text-transform: uppercase;
+            font-weight: 600;
+        }
+        
+        .place-unavailable {
+            background: #FFE0B2;
+            border-left: 4px solid #FF9800;
+        }
+        
+        .btn {
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+            text-transform: uppercase;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%);
+            color: #1a1a1a;
+            box-shadow: 0 4px 15px rgba(255, 215, 0, 0.3);
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(255, 215, 0, 0.4);
+        }
+        
+        .btn-secondary {
+            background: #FF9800;
+            color: white;
+        }
+        
+        .loading-container {
+            text-align: center;
+            padding: 40px 20px;
+        }
+        
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #FFE5B4;
+            border-top: 4px solid #FFD700;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+        }
+        
+        .stat-box {
+            background: linear-gradient(135deg, #FFF9E6 0%, #FFE5B4 100%);
+            padding: 12px;
+            border-radius: 8px;
+            text-align: center;
+            border: 2px solid #FFD700;
+        }
+        
+        .stat-value {
+            font-size: 22px;
+            font-weight: 900;
+        }
+        
+        .stat-label {
+            font-size: 10px;
+            color: #666;
+            margin-top: 4px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+    </style>
+</head>
+<body>
+    <div id="header">
+        <h1><span>🛡️</span><span>PADDOS</span></h1>
+        <div class="header-right">
+            <div id="live-indicator">
+                <div class="pulse"></div>
+                <span id="status-text">Initializing...</span>
+            </div>
+            <div class="confidence-badge" id="confidence-badge">Confidence: --</div>
+        </div>
+    </div>
+    
+    <div id="main-container">
+        <div id="map">
+            <div class="map-overlay">
+                <strong>🗺️ Live Map</strong><br>
+                <span id="map-status">Loading...</span>
+            </div>
+        </div>
+        
+        <div id="sidebar">
+            <div id="content">
+                <div class="loading-container">
+                    <div class="spinner"></div>
+                    <h3>🔄 Initializing Paddos...</h3>
+                    <p>Detecting location and loading data</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <script>
+        let map, socket, currentMarker, placeMarkers = [];
+        let isMonitoring = false, lastUpdate = null, currentLocation = null, updateCount = 0;
+        
+        function initMap(lat, lon) {
+            map = L.map('map').setView([lat, lon], 14);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap | Paddos',
+                maxZoom: 19
+            }).addTo(map);
+            
+            currentMarker = L.circleMarker([lat, lon], {
+                radius: 20, fillColor: '#FFD700', color: '#fff',
+                weight: 3, opacity: 1, fillOpacity: 0.9
+            }).addTo(map);
+            
+            currentMarker.bindPopup('<b>📍 Your Location</b><br>Loading...').openPopup();
+            document.getElementById('map-status').textContent = 'Map loaded';
+        }
+        
+        function updateSafetyDisplay(data) {
+            const content = document.getElementById('content');
+            lastUpdate = new Date();
+            updateCount++;
+            
+            document.getElementById('confidence-badge').textContent = `Confidence: ${data.confidence}%`;
+            
+            // Check if service is unavailable
+            if (data.rating === "SERVICE UNAVAILABLE" || data.service_status.message) {
+                content.innerHTML = `
+                    <div class="sidebar-section">
+                        <div class="service-unavailable">
+                            <div class="service-unavailable-icon">⚠️</div>
+                            <h3>Service Not Available</h3>
+                            <p><strong>Sorry, we don't have services running for this location yet.</strong></p>
+                            <p>Paddos is working to expand coverage to your area!</p>
+                            <p style="margin-top: 15px; font-size: 12px; color: #888;">
+                                We need minimum data (emergency services and activity information) 
+                                to calculate safety scores accurately.
+                            </p>
+                        </div>
+                    </div>
+                `;
+                return;
+            }
+            
+            content.innerHTML = `
+                <div class="sidebar-section">
+                    <div class="safety-score-card" style="background: ${data.color}20; color: ${data.color}; border-color: ${data.color};">
+                        <div class="score-value">${data.score}</div>
+                        <div class="score-rating">${data.rating}</div>
+                        <div class="score-confidence">📊 ${data.confidence}% Confidence</div>
+                        <div style="margin-top: 10px; font-size: 13px;">${data.time_period}</div>
+                        <div style="margin-top: 5px; font-size: 12px; opacity: 0.7;">${new Date().toLocaleTimeString()}</div>
+                    </div>
+                    ${data.service_status.overall !== "All services operational" ? `
+                        <div class="service-status-banner" style="background: ${data.service_status.status_color}20; border-color: ${data.service_status.status_color};">
+                            <span>⚠</span>
+                            <span>${data.service_status.overall}</span>
+                        </div>
+                    ` : ''}
+                </div>
+                
+                <div class="sidebar-section">
+                    <h2>📊 Safety Factors</h2>
+                    <div class="breakdown-grid">
+                        ${Object.entries(data.breakdown).map(([key, value]) => `
+                            <div class="breakdown-card">
+                                <div class="breakdown-label">${key.replace(/_/g, ' ')}</div>
+                                <div class="breakdown-value">${value}</div>
+                                <div class="breakdown-bar">
+                                    <div class="breakdown-bar-fill" style="width: ${value}%"></div>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+                
+                <div class="sidebar-section">
+                    <h2>📍 Nearest Services</h2>
+                    ${generateNearestServices(data.nearest)}
+                </div>
+                
+                <div class="sidebar-section">
+                    <h2>📈 Statistics</h2>
+                    <div class="stats-grid">
+                        <div class="stat-box">
+                            <div class="stat-value">${data.stats.activity_count}</div>
+                            <div class="stat-label">Active Places</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-value">${data.stats.infrastructure_count}</div>
+                            <div class="stat-label">Infrastructure</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-value">${data.stats.emergency_services_density.toFixed(1)}</div>
+                            <div class="stat-label">Services/km²</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="sidebar-section">
+                    <button class="btn ${isMonitoring ? 'btn-secondary' : 'btn-primary'}" 
+                            onclick="toggleMonitoring()">
+                        ${isMonitoring ? '⏸ Stop Updates' : '▶ Start Live Updates'}
+                    </button>
+                    <div style="margin-top: 10px; text-align: center; font-size: 12px; color: #666;">
+                        Updates: ${updateCount} | ${lastUpdate.toLocaleTimeString()}
+                    </div>
+                </div>
+            `;
+            
+            updateMapMarkers(data);
+        }
+        
+        function generateNearestServices(nearest) {
+            const services = [
+                { icon: '🏥', label: 'Hospital', key: 'hospital' },
+                { icon: '🚓', label: 'Police', key: 'police' },
+                { icon: '🚌', label: 'Bus Stop', key: 'bus_stop' },
+                { icon: '🚆', label: 'Train', key: 'train_station' }
+            ];
+            
+            return services.map(s => {
+                const place = nearest[s.key];
+                if (place) {
+                    return `
+                        <div class="place-card">
+                            <div class="place-header">
+                                <div>
+                                    <div class="place-type">${s.icon} ${s.label}</div>
+                                    <div class="place-name">${place.name}</div>
+                                </div>
+                                <div class="place-distance">📏 ${place.distance} km</div>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    return `
+                        <div class="place-card place-unavailable">
+                            <div class="place-type">${s.icon} ${s.label}</div>
+                            <div class="place-name">⚠️ Not available nearby</div>
+                        </div>
+                    `;
+                }
+            }).join('');
+        }
+        
+        function updateMapMarkers(data) {
+            if (currentMarker) {
+                currentMarker.setStyle({ fillColor: data.color });
+                currentMarker.setPopupContent(`
+                    <b>📍 Your Location</b><br>
+                    Score: <strong>${data.score}/100</strong><br>
+                    ${data.rating}
+                `);
+            }
+            
+            placeMarkers.forEach(m => map.removeLayer(m));
+            placeMarkers = [];
+            
+            const icons = { 'hospital': '🏥', 'police': '🚓', 'bus_stop': '🚌', 'train': '🚆' };
+            
+            Object.entries(data.all_places).forEach(([type, places]) => {
+                places.forEach(place => {
+                    const marker = L.marker([place.latitude, place.longitude], {
+                        icon: L.divIcon({
+                            html: `<div style="font-size:24px">${icons[place.type]||'📍'}</div>`,
+                            className: 'emoji-marker',
+                            iconSize: [30, 30]
+                        })
+                    }).addTo(map);
+                    
+                    marker.bindPopup(`<strong>${place.name}</strong><br>${place.distance} km`);
+                    placeMarkers.push(marker);
+                });
+            });
+        }
+        
+        function toggleMonitoring() {
+            if (!isMonitoring) {
+                socket.emit('start_monitoring', {
+                    latitude: currentLocation.lat,
+                    longitude: currentLocation.lon,
+                    country_code: currentLocation.code
+                });
+                isMonitoring = true;
+                document.getElementById('status-text').textContent = 'Live Updates Active';
+            } else {
+                socket.emit('stop_monitoring');
+                isMonitoring = false;
+                document.getElementById('status-text').textContent = 'Connected';
+            }
+        }
+        
+        async function loadSafetyData() {
+            try {
+                const resp = await fetch('/api/safety', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        latitude: currentLocation.lat,
+                        longitude: currentLocation.lon,
+                        country_code: currentLocation.code
+                    })
+                });
+                
+                const data = await resp.json();
+                if (data.success) {
+                    updateSafetyDisplay(data.data);
+                } else {
+                    throw new Error(data.error);
+                }
+            } catch (error) {
+                document.getElementById('content').innerHTML = `
+                    <div class="sidebar-section">
+                        <div class="service-unavailable">
+                            <div class="service-unavailable-icon">❌</div>
+                            <h3>Error Loading Data</h3>
+                            <p>${error.message}</p>
+                            <button class="btn btn-primary" onclick="location.reload()" style="margin-top:15px">
+                                🔄 Retry
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+        
+        async function init() {
+            socket = io();
+            
+            socket.on('connected', () => {
+                document.getElementById('status-text').textContent = 'Connected';
+            });
+            
+            socket.on('safety_update', updateSafetyDisplay);
+            socket.on('monitoring_started', () => {
+                document.getElementById('status-text').textContent = 'Live Updates Active';
+            });
+            socket.on('monitoring_stopped', () => {
+                document.getElementById('status-text').textContent = 'Connected';
+            });
+            
+            // Try browser geolocation
+            if (navigator.geolocation) {
+                try {
+                    const pos = await new Promise((resolve, reject) => {
+                        navigator.geolocation.getCurrentPosition(resolve, reject, {
+                            enableHighAccuracy: true,
+                            timeout: 10000
+                        });
+                    });
+                    
+                    currentLocation = {
+                        lat: pos.coords.latitude,
+                        lon: pos.coords.longitude,
+                        city: 'Your Location',
+                        code: 'XX'
+                    };
+                    
+                    initMap(currentLocation.lat, currentLocation.lon);
+                    await loadSafetyData();
+                    return;
+                } catch {}
+            }
+            
+            // Fallback to IP location
+            try {
+                const locResp = await fetch('/api/location');
+                const locData = await locResp.json();
+                
+                if (locData.success) {
+                    currentLocation = locData.data;
+                    initMap(currentLocation.lat, currentLocation.lon);
+                    await loadSafetyData();
+                } else {
+                    throw new Error('Location detection failed');
+                }
+            } catch (error) {
+                document.getElementById('content').innerHTML = `
+                    <div class="sidebar-section">
+                        <div class="service-unavailable">
+                            <div class="service-unavailable-icon">❌</div>
+                            <h3>Location Error</h3>
+                            <p>${error.message}</p>
+                            <button class="btn btn-primary" onclick="location.reload()">
+                                🔄 Retry
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+        
+        window.addEventListener('load', init);
+    </script>
+</body>
+</html>
