@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Paddos - Know Your Safety, Love Your Journey</title>
+    <title>Paddos - Travel Fearlessly, Explore Freely</title>
     
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
@@ -72,6 +72,23 @@
             border-radius: 12px;
             font-size: 12px;
             font-weight: 700;
+        }
+
+        .location-btn {
+            padding: 6px 12px;
+            background: rgba(0,0,0,0.15);
+            border: none;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            color: #1a1a1a;
+            transition: all 0.2s;
+        }
+
+        .location-btn:hover {
+            background: rgba(0,0,0,0.25);
+            transform: translateY(-1px);
         }
         
         #main-container {
@@ -296,6 +313,7 @@
         .btn-secondary {
             background: #FF9800;
             color: white;
+            margin-top: 10px;
         }
         
         .loading-container {
@@ -344,6 +362,21 @@
             font-weight: 600;
             text-transform: uppercase;
         }
+
+        .privacy-notice {
+            margin-top: 20px;
+            padding: 15px;
+            background: rgba(255, 215, 0, 0.2);
+            border-radius: 8px;
+            border: 2px solid #FFD700;
+            font-size: 12px;
+            text-align: left;
+        }
+
+        .privacy-notice ul {
+            margin: 8px 0 0 20px;
+            padding: 0;
+        }
     </style>
 </head>
 <body>
@@ -355,6 +388,9 @@
                 <span id="status-text">Initializing...</span>
             </div>
             <div class="confidence-badge" id="confidence-badge">Confidence: --</div>
+            <button class="location-btn" onclick="requestLocationManually()" title="Get precise location">
+                📍 My Location
+            </button>
         </div>
     </div>
     
@@ -372,6 +408,21 @@
                     <div class="spinner"></div>
                     <h3>🔄 Initializing Paddos...</h3>
                     <p>Detecting location and loading data</p>
+                    
+                    <div style="margin-top: 15px; padding: 12px; background: #FFE5B4; border-radius: 8px; font-size: 12px; color: #1a1a1a;">
+                        <strong>📍 For accurate location:</strong><br>
+                        Please <strong>allow location access</strong> when your browser asks.<br>
+                        <small style="opacity: 0.8;">(Without GPS permission, we use approximate IP location)</small>
+                    </div>
+                    
+                    <div class="privacy-notice">
+                        <strong>🔒 Your Privacy:</strong>
+                        <ul>
+                            <li>Your location is <strong>never stored</strong></li>
+                            <li>Processed in real-time only</li>
+                            <li>No tracking or user accounts</li>
+                        </ul>
+                    </div>
                 </div>
             </div>
         </div>
@@ -382,6 +433,7 @@
     <script>
         let map, socket, currentMarker, placeMarkers = [];
         let isMonitoring = false, lastUpdate = null, currentLocation = null, updateCount = 0;
+        let locationMethod = 'none'; // Track how location was obtained
         
         function initMap(lat, lon) {
             map = L.map('map').setView([lat, lon], 14);
@@ -397,6 +449,45 @@
             
             currentMarker.bindPopup('<b>📍 Your Location</b><br>Loading...').openPopup();
             document.getElementById('map-status').textContent = 'Map loaded';
+        }
+
+        function requestLocationManually() {
+            if (navigator.geolocation) {
+                document.getElementById('status-text').textContent = 'Requesting location...';
+                
+                navigator.geolocation.getCurrentPosition(
+                    async (position) => {
+                        currentLocation = {
+                            lat: position.coords.latitude,
+                            lon: position.coords.longitude,
+                            city: 'Your Location',
+                            code: 'XX'
+                        };
+                        locationMethod = 'gps';
+                        
+                        if (map) {
+                            map.setView([currentLocation.lat, currentLocation.lon], 14);
+                            currentMarker.setLatLng([currentLocation.lat, currentLocation.lon]);
+                        } else {
+                            initMap(currentLocation.lat, currentLocation.lon);
+                        }
+                        
+                        await loadSafetyData();
+                        document.getElementById('status-text').textContent = 'Connected';
+                    },
+                    (error) => {
+                        alert('❌ Location access denied.\n\nTo use your exact location:\n1. Click the lock icon in your browser\n2. Allow location permission\n3. Click "My Location" again');
+                        document.getElementById('status-text').textContent = 'Connected';
+                    },
+                    {
+                        enableHighAccuracy: true,
+                        timeout: 15000,
+                        maximumAge: 0
+                    }
+                );
+            } else {
+                alert('Your browser does not support location detection.');
+            }
         }
         
         function updateSafetyDisplay(data) {
@@ -425,8 +516,17 @@
                 return;
             }
             
+            // Show location accuracy warning if using IP
+            const locationWarning = locationMethod === 'ip' ? `
+                <div class="service-status-banner" style="background: #FFE5B420; border-color: #FFA500;">
+                    <span>📍</span>
+                    <span>Using approximate IP location. Click "My Location" for exact position.</span>
+                </div>
+            ` : '';
+            
             content.innerHTML = `
                 <div class="sidebar-section">
+                    ${locationWarning}
                     <div class="safety-score-card" style="background: ${data.color}20; color: ${data.color}; border-color: ${data.color};">
                         <div class="score-value">${data.score}</div>
                         <div class="score-rating">${data.rating}</div>
@@ -488,6 +588,15 @@
                     <div style="margin-top: 10px; text-align: center; font-size: 12px; color: #666;">
                         Updates: ${updateCount} | ${lastUpdate.toLocaleTimeString()}
                     </div>
+                </div>
+
+                <div class="sidebar-section" style="text-align: center; font-size: 11px; color: #666; padding: 15px;">
+                    <p style="margin-bottom: 8px;">
+                        🔒 <strong>Privacy First:</strong> Your location is never stored or tracked
+                    </p>
+                    <p style="font-size: 10px; opacity: 0.8;">
+                        Paddos processes all data in real-time and immediately forgets it
+                    </p>
                 </div>
             `;
             
@@ -629,7 +738,8 @@
                     const pos = await new Promise((resolve, reject) => {
                         navigator.geolocation.getCurrentPosition(resolve, reject, {
                             enableHighAccuracy: true,
-                            timeout: 10000
+                            timeout: 10000,
+                            maximumAge: 0
                         });
                     });
                     
@@ -639,11 +749,14 @@
                         city: 'Your Location',
                         code: 'XX'
                     };
+                    locationMethod = 'gps';
                     
                     initMap(currentLocation.lat, currentLocation.lon);
                     await loadSafetyData();
                     return;
-                } catch {}
+                } catch (geoError) {
+                    console.log('GPS failed, trying IP location...');
+                }
             }
             
             // Fallback to IP location
@@ -653,6 +766,7 @@
                 
                 if (locData.success) {
                     currentLocation = locData.data;
+                    locationMethod = 'ip';
                     initMap(currentLocation.lat, currentLocation.lon);
                     await loadSafetyData();
                 } else {
@@ -665,7 +779,10 @@
                             <div class="service-unavailable-icon">❌</div>
                             <h3>Location Error</h3>
                             <p>${error.message}</p>
-                            <button class="btn btn-primary" onclick="location.reload()">
+                            <button class="btn btn-primary" onclick="requestLocationManually()" style="margin-top:15px">
+                                📍 Allow Location Access
+                            </button>
+                            <button class="btn btn-primary" onclick="location.reload()" style="margin-top:10px; background: #888;">
                                 🔄 Retry
                             </button>
                         </div>
@@ -678,4 +795,3 @@
     </script>
 </body>
 </html>
-
