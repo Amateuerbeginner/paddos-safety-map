@@ -1,7 +1,7 @@
 """
-PADDOS - WOMEN'S SAFETY MAP
+DEVINA - WOMEN'S SAFETY MAP
 ============================
-Production-Ready Safety Prediction System
+
 """
 
 from flask import Flask, render_template, request, jsonify
@@ -23,7 +23,7 @@ session_lock = threading.Lock()
 
 
 def get_location_multi_source():
-    """Detect location with fallback"""
+    """Detecting location with fallback"""
     apis = [
         {
             'url': 'https://ipapi.co/json/',
@@ -165,9 +165,10 @@ def monitor_location(session_id, lat, lon, country_code):
 
 if __name__ == '__main__':
     print("\n" + "="*70)
-    print("🛡️  PADDOS - WOMEN'S SAFETY MAP".center(70))
+    print("🛡️  DEVINA - WOMEN'S SAFETY MAP".center(70))
     print("="*70)
     print("\n✓ Server starting at http://localhost:5000")
     print("✓ Press Ctrl+C to stop\n")
     
     socketio.run(app, debug=True, host='0.0.0.0', port=5000)
+
